@@ -9,12 +9,30 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 from os.path import exists
-import time
+import logging
+from datetime import datetime
+
+logger = logging.basicConfig(filename='logs.log', filemode='w', level='DEBUG', format="%(asctime)s:%(levelname)s:%(message)s", datefmt="%m-%d-%y %H:%M:%S %p",)
 
 load_dotenv()
-
 EMAIL = os.getenv('EMAIL')
 PASSWORD = os.getenv('PASSWORD')
+
+month = {	'01':'Janauary',
+		'02':'February',
+		'03':'March',
+		'04':'April',
+		'05':'May',
+		'06':'June',
+		'07':'July',
+		'08':'August',
+		'09':'September',
+		'10':'October',
+		'11':'November',
+		'12':'December'		}
+
+now = datetime.now()
+date = f'{month[now.strftime("%m")]} {now.strftime("%d")}, {now.strftime("%Y")}'
 
 def send_mail(sender, reciever, subject, body, password):
     message = MIMEMultipart()
@@ -22,7 +40,7 @@ def send_mail(sender, reciever, subject, body, password):
     message["To"] = reciever
     message["Subject"] = subject
 
-    message.attach(MIMEText(body, "plain"))
+    message.attach(MIMEText(body, "html"))
 
     filename = "Volunteering_Hours.pdf"
 
@@ -42,16 +60,16 @@ def send_mail(sender, reciever, subject, body, password):
         server.login(sender, password)
         server.sendmail(sender, reciever, text)
 
-
-document = Document("HOPE-Volunteering-Letter.docx")
-
 def edit_doc(first_name, last_name, hours):
+    document = Document("HOPE-Volunteering-Letter.docx")
+    paragraph2 = document.paragraphs[2]
+    paragraph2.text = paragraph2.text.replace('<<Date>>', date)
     paragraph6 = document.paragraphs[6]
-    paragraph6.text = paragraph6.text.replace('<<First Name>>', first_name)
-    paragraph6.text = paragraph6.text.replace('<<Last Name>>', last_name)
-    paragraph6.text = paragraph6.text.replace('<<Hours>>', str(hours))
+    paragraph6.text = paragraph6.text.replace('<<First Name>>', str(first_name).strip())
+    paragraph6.text = paragraph6.text.replace('<<Last Name>>', str(last_name).strip())
+    paragraph6.text = paragraph6.text.replace('<<Hours>>', str(hours).strip())
     document.save("Volunteering_Hours.docx")
-    convert("Volunteering_Hours.docx")
+    convert("Volunteering_Hours.docx") #convert edited docx to pdf
 
 def check_file_existence(text):
     while True:
@@ -76,23 +94,26 @@ def determine_correct_pandas_conversion(file):
 
 def main():
     print("Welcome to the Program")
-    main_file = 'test.xlsx'
-    if not exists('test.xlsx'):
+    main_file = 'main.xlsx'
+    if not exists('main.xlsx'):
         main_file = check_file_existence('\nEnter the main spreadsheet: ')
 
-    subject = ''
-    body = ''
+    subject = '2022-2023 Hope Volunteering Letter'
 
     df = determine_correct_pandas_conversion(main_file)
-
-    number_of_entry = len(df.index)
     
     for index, row in df.iterrows():
-        #edit_doc(row['First Name'], row['Last Name'], row['Total Hours'])
-        #send_mail(EMAIL, row['Email'], subject, body, password=PASSWORD)
-        time.sleep(1)
-        print(f" Progress: {(int(index/number_of_entry * 100))}%\r", end='')
-    print("Complete       ")
+        print(f"Sending {index} {row['First Name']}")
+
+        with open('body.html', 'r') as file:
+            body = file.readlines()
+            body = ''.join(body)
+            body = body.replace('${First Name}', row['First Name'])
+
+        edit_doc(row['First Name'], row['Last Name'], row['Total Hours'])
+        send_mail(EMAIL, row['Email'], subject, body, password=PASSWORD)
+        logging.info(f"{row['First Name']} Email sent")
+    print('Done')
 
 if __name__ == "__main__":
     main()
